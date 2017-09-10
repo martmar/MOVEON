@@ -1,13 +1,14 @@
-FROM nginx:stable
+FROM php:7-fpm
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        bc \
-        curl \
-        unzip \
-        openssl \
-	libssl-dev \
+RUN apt-get update && apt-get -y install \
+        git g++ libcurl4-gnutls-dev libicu-dev libmcrypt-dev libpq-dev libxml2-dev unzip zlib1g-dev \
+    && git clone -b php7 https://github.com/phpredis/phpredis.git /usr/src/php/ext/redis \
+    && docker-php-ext-install curl intl json mbstring mcrypt pdo pdo_pgsql redis xml \
+    && apt-get autoremove && apt-get autoclean \
     && rm -rf /var/lib/apt/lists/*
+
+RUN echo 'date.timezone="Europe/Madrid"' >>  /usr/local/etc/php/conf.d/date.ini
+RUN echo 'session.save_path = "/tmp"' >>  /usr/local/etc/php/conf.d/session.ini
 
 ENV CONSUL_TEMPLATE_VERSION 0.16.0
 ENV CONSUL_TEMPLATE_SHA1 064b0b492bb7ca3663811d297436a4bbf3226de706d2b76adade7021cd22e156
@@ -32,19 +33,7 @@ COPY config/ /etc
 COPY scripts/ /usr/local/bin
 
 RUN chmod +x /usr/local/bin/reload.sh
-RUN chmod +x /usr/local/bin/sensor.sh
-
-RUN echo 01 > ca.srl 
-RUN openssl genrsa -out ca-key.pem 2048 
-RUN openssl req -new -x509 -days 365 -subj "/CN=*" -key ca-key.pem -out ca.pem 
-RUN openssl genrsa -out server-key.pem 2048 
-RUN openssl req -subj "/CN=*" -new -key server-key.pem -out server.csr 
-RUN openssl x509 -req -days 365 -in server.csr -CA ca.pem -CAkey ca-key.pem -out server-cert.pem 
-RUN openssl rsa -in server-key.pem -out server-key.pem
-RUN cp *.pem /etc/nginx/
-RUN cp *.csr /etc/nginx/
 
 CMD [ "/usr/local/bin/containerpilot", \
-    "nginx", \
-        "-g", \
-        "daemon off;"]
+    "php-fpm", \
+        "--nodaemonize"]
